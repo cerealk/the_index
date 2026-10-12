@@ -25,5 +25,5 @@ dependencies {
 }
 
 application {
-    mainClass = "library.AppKt"
+    mainClass = "theindex.AppKt"
 }

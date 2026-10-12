@@ -1,4 +1,4 @@
-package library
+package theindex
 
 import org.testcontainers.postgresql.PostgreSQLContainer
 import java.nio.file.Files
@@ -16,7 +16,7 @@ object TestDatabase {
     }
 
     fun config(): AppConfig {
-        val root = Files.createTempDirectory("library-test")
+        val root = Files.createTempDirectory("the_index-test")
         return AppConfig(
             port = 0,
             database = DatabaseConfig(

@@ -1,8 +1,8 @@
-package library.persistence
+package theindex.persistence
 
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
-import library.DatabaseConfig
+import theindex.DatabaseConfig
 import org.flywaydb.core.Flyway
 import javax.sql.DataSource
 

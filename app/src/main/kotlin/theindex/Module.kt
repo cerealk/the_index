@@ -1,4 +1,4 @@
-package library
+package theindex
 
 import com.zaxxer.hikari.HikariDataSource
 import io.ktor.serialization.kotlinx.json.json
@@ -7,11 +7,11 @@ import io.ktor.server.application.ApplicationStopped
 import io.ktor.server.application.install
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
-import library.health.DataSourceHealthCheck
-import library.health.HealthCheck
-import library.health.healthRoutes
-import library.persistence.dataSource
-import library.persistence.migrate
+import theindex.health.DataSourceHealthCheck
+import theindex.health.HealthCheck
+import theindex.health.healthRoutes
+import theindex.persistence.dataSource
+import theindex.persistence.migrate
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.koin.dsl.module
 import org.koin.ktor.ext.get

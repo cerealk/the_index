@@ -22,4 +22,4 @@ plugins {
 include(":app")
 include(":utils")
 
-rootProject.name = "library"
+rootProject.name = "the_index"

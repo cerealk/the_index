@@ -1,4 +1,4 @@
-package library
+package theindex
 
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -7,8 +7,8 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
-import library.health.HealthCheck
-import library.health.healthRoutes
+import theindex.health.HealthCheck
+import theindex.health.healthRoutes
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 

@@ -1,4 +1,4 @@
-package library.health
+package theindex.health
 
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.response.respond

@@ -10,8 +10,8 @@ RUN ./gradlew --no-daemon :app:installDist
 
 # Runtime stage: just the JRE and the distribution.
 FROM eclipse-temurin:24-jre
-WORKDIR /opt/library
+WORKDIR /opt/the_index
 COPY --from=build /src/app/build/install/app ./
 VOLUME ["/data/storage", "/data/inbox", "/data/cache"]
 EXPOSE 8080
-ENTRYPOINT ["/opt/library/bin/app"]
+ENTRYPOINT ["/opt/the_index/bin/app"]

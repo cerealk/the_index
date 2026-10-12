@@ -1,8 +1,8 @@
-package library
+package theindex
 
 import io.kotest.matchers.collections.shouldContainAll
-import library.persistence.dataSource
-import library.persistence.migrate
+import theindex.persistence.dataSource
+import theindex.persistence.migrate
 import org.junit.jupiter.api.Test
 
 class MigrationTest {

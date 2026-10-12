@@ -1,4 +1,4 @@
-package library
+package theindex
 
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
@@ -8,9 +8,9 @@ import java.nio.file.Path
 
 class AppConfigTest {
     private val database = mapOf(
-        "LIBRARY_DB_URL" to "jdbc:postgresql://db:5432/library",
-        "LIBRARY_DB_USER" to "library",
-        "LIBRARY_DB_PASSWORD" to "secret",
+        "THE_INDEX_DB_URL" to "jdbc:postgresql://db:5432/the_index",
+        "THE_INDEX_DB_USER" to "the_index",
+        "THE_INDEX_DB_PASSWORD" to "secret",
     )
 
     @Test
@@ -18,7 +18,7 @@ class AppConfigTest {
         val config = AppConfig.fromEnvironment(database)
 
         config.port shouldBe 8080
-        config.database shouldBe DatabaseConfig("jdbc:postgresql://db:5432/library", "library", "secret")
+        config.database shouldBe DatabaseConfig("jdbc:postgresql://db:5432/the_index", "the_index", "secret")
         config.storageDir shouldBe Path.of("/data/storage")
         config.inboxDir shouldBe Path.of("/data/inbox")
         config.cacheDir shouldBe Path.of("/data/cache")
@@ -27,7 +27,7 @@ class AppConfigTest {
     @Test
     fun `reads overrides from the environment`() {
         val config = AppConfig.fromEnvironment(
-            database + mapOf("LIBRARY_PORT" to "9000", "LIBRARY_INBOX_DIR" to "/import")
+            database + mapOf("THE_INDEX_PORT" to "9000", "THE_INDEX_INBOX_DIR" to "/import")
         )
 
         config.port shouldBe 9000
@@ -38,6 +38,6 @@ class AppConfigTest {
     fun `fails fast when the database is not configured`() {
         val error = shouldThrow<IllegalStateException> { AppConfig.fromEnvironment(emptyMap()) }
 
-        error.message shouldContain "LIBRARY_DB_URL"
+        error.message shouldContain "THE_INDEX_DB_URL"
     }
 }

@@ -1,4 +1,4 @@
-package library
+package theindex
 
 import java.nio.file.Path
 
@@ -20,15 +20,15 @@ data class AppConfig(
             fun required(name: String) = env[name] ?: error("Missing environment variable $name")
 
             return AppConfig(
-                port = env["LIBRARY_PORT"]?.toInt() ?: 8080,
+                port = env["THE_INDEX_PORT"]?.toInt() ?: 8080,
                 database = DatabaseConfig(
-                    url = required("LIBRARY_DB_URL"),
-                    user = required("LIBRARY_DB_USER"),
-                    password = required("LIBRARY_DB_PASSWORD"),
+                    url = required("THE_INDEX_DB_URL"),
+                    user = required("THE_INDEX_DB_USER"),
+                    password = required("THE_INDEX_DB_PASSWORD"),
                 ),
-                storageDir = Path.of(env["LIBRARY_STORAGE_DIR"] ?: "/data/storage"),
-                inboxDir = Path.of(env["LIBRARY_INBOX_DIR"] ?: "/data/inbox"),
-                cacheDir = Path.of(env["LIBRARY_CACHE_DIR"] ?: "/data/cache"),
+                storageDir = Path.of(env["THE_INDEX_STORAGE_DIR"] ?: "/data/storage"),
+                inboxDir = Path.of(env["THE_INDEX_INBOX_DIR"] ?: "/data/inbox"),
+                cacheDir = Path.of(env["THE_INDEX_CACHE_DIR"] ?: "/data/cache"),
             )
         }
     }
