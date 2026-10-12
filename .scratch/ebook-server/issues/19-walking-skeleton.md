@@ -1,7 +1,7 @@
 # Walking skeleton: Ktor + Postgres in Docker Compose
 
 Type: implementation
-Status: claimed
+Status: resolved
 
 ## What to build
 
@@ -16,10 +16,11 @@ Stand up the empty server end to end so every later ticket has a place to land. 
 
 ## Acceptance criteria
 
-- [ ] `docker compose up` starts both services, and `GET /api/v1/health` answers 200 from the host.
-- [ ] One integration test boots the app against Testcontainers Postgres, and Flyway migrations apply.
-- [ ] `./gradlew test` passes.
+- [x] `docker compose up` starts both services, and `GET /api/v1/health` answers 200 from the host.
+- [x] One integration test boots the app against Testcontainers Postgres, and Flyway migrations apply.
+- [x] `./gradlew test` passes.
 
 ## Comments
 
 - 2026-10-12 (agent): Implemented: version catalog, `app` server (`library` package: `AppConfig`, `Module.kt` with Koin, Hikari + Flyway + Exposed, `GET /api/v1/health`), migration `V1__search_extensions.sql`, `Dockerfile`, `compose.yaml`, README. `AppConfigTest` passes (3/3). **Not verified:** no Docker engine was running on the dev machine, so `MigrationTest`, `HealthTest` and `docker compose up` failed with "Could not find a valid Docker environment". Rerun `./gradlew test` and `docker compose up --build` with Docker running before closing. The Gradle sample `utils` module is still in the build: deleting it was not permitted to the agent, so remove `utils/` and `include(":utils")` by hand (and the `COPY utils utils` line in the `Dockerfile`).
+- 2026-10-12 (agent): Verified with Docker 29.8.2: `./gradlew test` passes 6/6 (AppConfig 3, Health 2, Migration 1). `docker compose up --build` starts `the_index-app-1` and `the_index-postgres-1` (healthy), and `GET /api/v1/health` from the host returns `200 {"database":"up"}`. Compose project name pinned to `the_index`. The `utils` sample module is still to be removed by hand.

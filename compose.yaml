@@ -1,4 +1,6 @@
 # Iteration 1 deployment: the server plus PostgreSQL (spec §2).
+name: the_index
+
 services:
   app:
     build: .
