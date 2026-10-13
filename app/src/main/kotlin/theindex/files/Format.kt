@@ -4,11 +4,12 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.util.zip.ZipFile
 
-enum class Format(val extension: String) {
-    EPUB("epub"),
-    PDF("pdf"),
-    CBZ("cbz"),
-    CBR("cbr");
+/** Declared in preference order: when a Publication has several Files, the earlier Format is offered first (spec §7). */
+enum class Format(val extension: String, val mediaType: String) {
+    CBZ("cbz", "application/vnd.comicbook+zip"),
+    CBR("cbr", "application/vnd.comicbook-rar"),
+    EPUB("epub", "application/epub+zip"),
+    PDF("pdf", "application/pdf");
 
     val dbValue: String get() = extension
 

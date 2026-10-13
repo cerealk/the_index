@@ -25,6 +25,8 @@ import theindex.imports.ImportJobs
 import theindex.imports.ImportWorker
 import theindex.imports.Inbox
 import theindex.imports.importRoutes
+import theindex.opds.OpdsCatalog
+import theindex.opds.opdsRoutes
 import theindex.persistence.dataSource
 import theindex.persistence.migrate
 import theindex.publications.Library
@@ -44,6 +46,7 @@ fun appModule(config: AppConfig, clock: Clock = Clock.systemUTC()) = module {
     single { Library(get(), get()) }
     single { ImportWorker(get(), get(), get(), get()) }
     single { Inbox(config.inboxDir, get(), get(), get(), config.inboxStabilityWindow) }
+    single { OpdsCatalog(get(), get(), get()) }
 }
 
 fun Application.module(config: AppConfig, clock: Clock = Clock.systemUTC()) {
@@ -67,6 +70,7 @@ fun Application.module(config: AppConfig, clock: Clock = Clock.systemUTC()) {
     routing {
         healthRoutes(get())
         importRoutes(get())
+        opdsRoutes(get())
     }
 }
 

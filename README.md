@@ -13,6 +13,8 @@ cp book.epub data/inbox/                    # imported within one poll
 curl http://localhost:8080/api/v1/imports
 ```
 
+In Readest or Panels, add the OPDS catalog `http://<server>:8080/opds/` (no credentials).
+
 Compose starts the app and PostgreSQL. Host directories for the app default to `./data/{storage,inbox,cache}` and can be changed with `THE_INDEX_STORAGE`, `THE_INDEX_INBOX` and `THE_INDEX_CACHE`. `THE_INDEX_PORT` changes the published port and `THE_INDEX_DB_PASSWORD` the database password.
 
 The app reads its configuration from the environment:

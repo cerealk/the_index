@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:opds="http://opds-spec.org/2010/catalog" xmlns:dc="http://purl.org/dc/terms/">
+  <id>urn:the_index:root</id>
+  <title>the_index</title>
+  <updated>2026-10-12T10:00:00Z</updated>
+  <author>
+    <name>the_index</name>
+  </author>
+  <link rel="self" href="/opds/" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <link rel="start" href="/opds/" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <entry>
+    <id>urn:the_index:recent</id>
+    <title>Recently added</title>
+    <updated>2026-10-12T10:00:00Z</updated>
+    <content type="text">The newest Publications first</content>
+    <link rel="http://opds-spec.org/sort/new" href="/opds/recent" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  </entry>
+  <entry>
+    <id>urn:the_index:all</id>
+    <title>All</title>
+    <updated>2026-10-12T10:00:00Z</updated>
+    <content type="text">Every Publication, A–Z</content>
+    <link rel="subsection" href="/opds/all" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  </entry>
+</feed>

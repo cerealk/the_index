@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:opds="http://opds-spec.org/2010/catalog" xmlns:dc="http://purl.org/dc/terms/">
+  <id>urn:the_index:all:page:2</id>
+  <title>All</title>
+  <updated>2026-10-12T10:00:00Z</updated>
+  <author>
+    <name>the_index</name>
+  </author>
+  <link rel="self" href="/opds/all?page=2" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  <link rel="start" href="/opds/" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <link rel="up" href="/opds/" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <link rel="previous" href="/opds/all" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  <link rel="next" href="/opds/all?page=3" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  <entry>
+    <id>urn:the_index:publication:7</id>
+    <title>Tom &amp; Jerry &lt;1&gt;</title>
+    <updated>2026-10-11T09:30:00Z</updated>
+    <author>
+      <name>Frank Herbert</name>
+    </author>
+    <summary>A &quot;desert&quot; planet</summary>
+    <link rel="http://opds-spec.org/acquisition" href="/opds/files/12/Dune.epub" type="application/epub+zip" length="1234"/>
+    <link rel="http://opds-spec.org/acquisition" href="/opds/files/13/Dune.pdf" type="application/pdf" length="5678"/>
+  </entry>
+  <entry>
+    <id>urn:the_index:publication:8</id>
+    <title>Saga 001</title>
+    <updated>2026-10-11T09:31:00Z</updated>
+    <link rel="http://opds-spec.org/acquisition" href="/opds/files/14/Saga%20001.cbz" type="application/vnd.comicbook+zip" length="99"/>
+  </entry>
+</feed>
