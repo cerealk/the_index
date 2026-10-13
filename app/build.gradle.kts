@@ -21,6 +21,7 @@ dependencies {
     testRuntimeOnly(libs.junitPlatformLauncher)
     testImplementation(libs.kotestAssertions)
     testImplementation(libs.ktorServerTestHost)
+    testImplementation(libs.ktorClientContentNegotiation)
     testImplementation(libs.testcontainersPostgresql)
 }
 

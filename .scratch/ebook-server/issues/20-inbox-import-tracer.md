@@ -1,7 +1,7 @@
 # Inbox → Import job → stored Original
 
 Type: implementation
-Status: ready-for-agent
+Status: resolved
 Blocked by: 19
 
 ## What to build
@@ -20,8 +20,14 @@ The thinnest import path: a file dropped in the inbox ends up stored as an Origi
 
 ## Acceptance criteria
 
-- [ ] Dropping an epub into the inbox yields a `done` job, a Publication and a File at the expected path, byte-identical to the input.
-- [ ] Dropping the same bytes again yields a `skipped` job, and the inbox copy is gone.
-- [ ] A non-ebook file yields a `failed` job and ends up in `failed/<jobId>/`.
-- [ ] Killing the app mid-job and restarting completes the job without duplicates (test at the worker level).
-- [ ] The partial MD5 matches KOReader's algorithm on a reference file.
+- [x] Dropping an epub into the inbox yields a `done` job, a Publication and a File at the expected path, byte-identical to the input.
+- [x] Dropping the same bytes again yields a `skipped` job, and the inbox copy is gone.
+- [x] A non-ebook file yields a `failed` job and ends up in `failed/<jobId>/`.
+- [x] Killing the app mid-job and restarting completes the job without duplicates (test at the worker level).
+- [x] The partial MD5 matches KOReader's algorithm on a reference file.
+
+## Comments
+
+- 2026-10-12 (agent): Done. Migration `V2__import_publication_file.sql` (publication, file, import_job). Code in `theindex.files` (`FormatDetector`, `Hasher`, `Storage`), `theindex.publications` (`Kind`, `Library`), `theindex.imports` (`Inbox`, `ImportWorker`, `ImportJobs`, routes). Crash safety: the Publication id is reserved and the target path recorded on the job (`store_target`) in a committed transaction, the copy is atomic (temp file + fsync + atomic rename), then the rows and the job outcome commit together. `recover()` deletes copies whose rows never committed and resets `processing` jobs. Tests: 25/25 pass (`ImportPipelineTest` 8, `ImportRoutesTest` 3, Format/Hasher/Storage unit tests). The partial MD5 reference vector was computed independently in Python using 32-bit shift semantics: KOReader's first offset `1024 << -2` wraps to 0. E2E in Docker Compose: an epub and a text file dropped in `./data/inbox` became a `done` job (stored at `prose/Unknown/The Hobbit (1)/The Hobbit.epub`) and a `failed` job (`failed/1/notes.txt`) within one poll.
+- Beyond scope: inbox hint folders (`prose/`, `comics/`) are already recorded on the job and applied as the Kind, which overlaps with [Kind inference and inbox hint folders](26-kind-inference.md).
+- New settings: `THE_INDEX_INBOX_POLL_SECONDS` (default 10) and `THE_INDEX_INBOX_STABILITY_SECONDS` (default 3).

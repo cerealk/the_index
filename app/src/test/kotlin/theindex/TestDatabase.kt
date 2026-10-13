@@ -27,6 +27,7 @@ object TestDatabase {
             storageDir = root.resolve("storage"),
             inboxDir = root.resolve("inbox"),
             cacheDir = root.resolve("cache"),
+            runBackgroundJobs = false,
         )
     }
 

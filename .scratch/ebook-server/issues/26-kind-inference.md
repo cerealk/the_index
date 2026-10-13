@@ -15,3 +15,7 @@ Spec: [§5 stage 4](../spec.md#5-import-pipeline).
 
 - [ ] A comic epub fixture and an image-only pdf are inferred as comics.
 - [ ] A cbz dropped in `inbox/prose/` becomes prose.
+
+## Comments
+
+- 2026-10-12 (agent): The inbox hint folders already work, from [Inbox → Import job → stored Original](20-inbox-import-tracer.md): `Inbox.kindHint` records the hint on the job and `ImportWorker` applies it. What's left is the inference signals and a test for "a cbz in `inbox/prose/` becomes prose".
