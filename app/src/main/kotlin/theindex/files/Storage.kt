@@ -25,16 +25,33 @@ class Storage(val root: Path) {
     }
 
     /**
-     * Where a Publication's File lives, relative to [root]. Until Credits and Series exist,
-     * prose goes under the "Unknown" author and comics have no Series folder.
+     * Where a Publication's File lives, relative to [root] (spec §4):
+     * - prose: `prose/<Author>/<Series>/<NN> - <Title> (<id>)/<Title>.<ext>`, or `prose/<Author>/<Title> (<id>)/…`
+     * - comic: `comics/<Series>/<Series> #<Number> - <Title> (<id>)/<same name>.<ext>`, or `comics/<Title> (<id>)/…`
      */
-    fun layoutPath(kind: Kind, publicationId: Long, title: String, format: Format): String {
-        val name = segment(title)
-        val folder = "$name ($publicationId)"
-        val file = "$name.${format.extension}"
-        return when (kind) {
-            Kind.PROSE -> "prose/${segment(UNKNOWN_AUTHOR)}/$folder/$file"
-            Kind.COMIC -> "comics/$folder/$file"
+    fun layoutPath(layout: Layout): String {
+        val title = segment(layout.title)
+        val ext = layout.format.extension
+        val id = layout.publicationId
+        val series = layout.series?.let(::segment)
+        val position = layout.position?.takeIf { it.isNotBlank() }
+        return when (layout.kind) {
+            Kind.PROSE -> {
+                val author = segment(layout.author ?: UNKNOWN_AUTHOR)
+                when {
+                    series == null -> "prose/$author/$title ($id)/$title.$ext"
+                    position == null -> "prose/$author/$series/$title ($id)/$title.$ext"
+                    else -> "prose/$author/$series/${segment(padded(position))} - $title ($id)/$title.$ext"
+                }
+            }
+            Kind.COMIC -> {
+                if (series == null) {
+                    "comics/$title ($id)/$title.$ext"
+                } else {
+                    val name = segment(if (position == null) "$series - $title" else "$series #$position - $title")
+                    "comics/$series/$name ($id)/$name.$ext"
+                }
+            }
         }
     }
 
@@ -72,8 +89,24 @@ class Storage(val root: Path) {
         runCatching { FileChannel.open(directory, READ).use { it.force(true) } }
     }
 
+    /** Everything that decides a stored path. [series] is the display name, volume included. */
+    data class Layout(
+        val kind: Kind,
+        val publicationId: Long,
+        val title: String,
+        val format: Format,
+        val author: String? = null,
+        val series: String? = null,
+        val position: String? = null,
+    )
+
     companion object {
         const val UNKNOWN_AUTHOR = "Unknown"
+        private val INTEGER_PREFIX = Regex("""^(\d+)(.*)$""")
+
+        /** Two-digit positions keep a Series folder in reading order: "1" → "01", "1.5" → "01.5". */
+        private fun padded(position: String): String =
+            INTEGER_PREFIX.matchEntire(position.trim())?.let { it.groupValues[1].padStart(2, '0') + it.groupValues[2] } ?: position
         private const val MAX_SEGMENT_LENGTH = 100
         private val ILLEGAL = Regex("""[/\\:*?"<>|\p{Cntrl}]""")
 

@@ -9,7 +9,25 @@ import java.util.zip.ZipOutputStream
 
 /** Small, synthetic files of each Format. Only their structure matters, not their content. */
 object Fixtures {
-    fun epub(salt: String = ""): ByteArray = zip {
+    /** A structurally valid epub around [opf]; [salt] only changes the bytes. */
+    fun epub(salt: String = "", opf: String = opf(comment = salt)): ByteArray = epubEntries(
+        "META-INF/container.xml" to CONTAINER,
+        "OEBPS/content.opf" to opf,
+    )
+
+    /** An OPF package document; [metadata] goes inside `<metadata>` with the dc and opf prefixes declared. */
+    fun opf(metadata: String = "", version: String = "3.0", comment: String = ""): String =
+        """<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="$version" unique-identifier="uid">
+<!-- $comment -->
+<metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+$metadata
+</metadata>
+</package>
+"""
+
+    /** An epub (by its mimetype) whose zip holds [entries] after the mimetype. */
+    fun epubEntries(vararg entries: Pair<String, String>): ByteArray = zip {
         val mimetype = "application/epub+zip".toByteArray()
         putNextEntry(ZipEntry("mimetype").apply {
             method = ZipEntry.STORED
@@ -17,11 +35,16 @@ object Fixtures {
             crc = CRC32().apply { update(mimetype) }.value
         })
         write(mimetype)
-        putNextEntry(ZipEntry("META-INF/container.xml"))
-        write("<container/>".toByteArray())
-        putNextEntry(ZipEntry("OEBPS/content.opf"))
-        write("<package>$salt</package>".toByteArray())
+        entries.forEach { (name, content) ->
+            putNextEntry(ZipEntry(name))
+            write(content.toByteArray())
+        }
     }
+
+    const val CONTAINER = """<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>
+</container>"""
 
     fun cbz(salt: String = ""): ByteArray = zip {
         putNextEntry(ZipEntry("001.jpg"))

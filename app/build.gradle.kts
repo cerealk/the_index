@@ -12,6 +12,7 @@ dependencies {
     implementation(libs.bundles.kotlinxEcosystem)
     implementation(libs.bundles.ktorServer)
     implementation(libs.bundles.persistence)
+    implementation(libs.jsoup)
     implementation(libs.koinKtor)
     implementation(libs.koinLoggerSlf4j)
     runtimeOnly(libs.logback)

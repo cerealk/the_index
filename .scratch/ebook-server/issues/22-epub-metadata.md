@@ -1,7 +1,7 @@
 # epub metadata extraction, Contributors, Series and Tags
 
 Type: implementation
-Status: ready-for-agent
+Status: resolved
 Blocked by: 20
 
 ## What to build
@@ -17,6 +17,13 @@ Extract real metadata from epub and introduce the shared people/series/tag model
 
 ## Acceptance criteria
 
-- [ ] Fixture epubs (EPUB 2 and EPUB 3, with and without series) import with the expected fields, Credits and Series position.
-- [ ] Two epubs by "J. R. R. Tolkien" and "Tolkien, J.R.R." share one Contributor.
-- [ ] A corrupt epub yields a `failed` job.
+- [x] Fixture epubs (EPUB 2 and EPUB 3, with and without series) import with the expected fields, Credits and Series position.
+- [x] Two epubs by "J. R. R. Tolkien" and "Tolkien, J.R.R." share one Contributor.
+- [x] A corrupt epub yields a `failed` job.
+
+## Comments
+
+- 2026-10-13 (agent): Done. Migration `V3__publication_metadata.sql`: `contributor`, `series` and `tag` with a unique `match_key`; `credit` (ordered, role check); `publication_tag`; `identifier`; new Publication columns (description, publisher, language, partial `publication_date`, Series + position text + numeric sort key); `import_job.metadata` (JSONB snapshot, exposed in `GET /api/v1/imports`). Code: `theindex.metadata` (`EpubExtractor`, `ExtractedMetadata`, normalizers), `theindex.publications` (`Names`, `Role`, `Library.insertPublication` / `layoutNames`), `theindex.imports.Drafts`. Folder layout per spec §4 and §15: an existing Contributor's or Series' spelling names the folder, and positions are padded to two digits. Tests: 53/53 pass (`EpubExtractorTest`, `NamesTest`, `MetadataImportTest`, updated `StorageTest`).
+- Checked against real epubs (calibre's quick-start guides, Italian retail and calibre-converted novels) in a throwaway Compose project. Two fixes came from it: (1) calibre writes a row number *or* a uuid under the `calibre` scheme, and sometimes junk in `uuid_id`, so **files never produce the `calibre` identifier type**. The Calibre identity comes from `metadata.db` only ([Calibre Import](38-calibre-import.md)), and `uuid` values must be well-formed. (2) "Unknown" (calibre's placeholder) and similar names are not Contributors. A bare, valid ISBN-13 is recognised as `isbn`.
+- Decisions inside the ticket: the **prose filename parser is minimal**: title = file name with underscores read as spaces, because "Author - Title" and calibre's "Title - Author" can't be told apart. The pattern-based parser comes with [comic metadata](24-comic-metadata-cbz.md). Sort titles move leading articles for en/it/fr/es/de, and use English rules when the language is unknown. A `dc:contributor` is kept only in a role we map (calibre lists itself as `bkp`), while a `dc:creator` with an unmapped role gets the Kind's default role. DRM (`rights.xml`, or `encryption.xml` other than font obfuscation) → failed "epub is encrypted (DRM)".
+- Beyond scope: OPDS entries now carry `<author>` from author/writer Credits.

@@ -8,20 +8,21 @@ import theindex.files.FormatDetector
 import theindex.files.Hasher
 import theindex.files.Hashes
 import theindex.files.Storage
+import theindex.metadata.Extractors
+import theindex.metadata.UnreadableFileException
 import theindex.publications.Kind
 import theindex.publications.Library
 import theindex.publications.NewOriginal
-import theindex.publications.NewPublication
+import theindex.publications.PublicationDraft
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.deleteRecursively
 import kotlin.io.path.exists
-import kotlin.io.path.nameWithoutExtension
 import kotlin.io.path.ExperimentalPathApi
 
 /**
  * Runs Import jobs through the pipeline one at a time (spec §5). Implemented stages:
- * detect Format, hash (exact duplicates skipped), decide Kind, store the Original.
+ * detect Format, hash (exact duplicates skipped), extract metadata, decide Kind, store the Original.
  */
 class ImportWorker(
     private val db: Database,
@@ -79,31 +80,51 @@ class ImportWorker(
             return
         }
 
-        // Stage 4: Kind, from the hint or the Format until metadata extraction exists.
+        // Stage 3: metadata, kept on the job as a raw snapshot.
+        val metadata = try {
+            Extractors.extract(format, staged)
+        } catch (e: UnreadableFileException) {
+            return fail(job, e.message ?: "cannot open the file")
+        }
+        jobs.recordMetadata(job.id, metadata)
+
+        // Stage 4: Kind, from the hint or the Format until inference exists.
         val kind = job.kindHint ?: Kind.defaultFor(format)
-        val title = titleFromFileName(job.originalName)
+        val (draft, warnings) = Drafts.from(metadata, kind, job.originalName)
 
         // Stage 6: store the Original.
-        store(job, staged, NewPublicationDraft(kind, title, format), hashes)
+        store(job, staged, draft, NewFile(format, hashes), warnings)
     }
 
-    private data class NewPublicationDraft(val kind: Kind, val title: String, val format: Format)
+    private data class NewFile(val format: Format, val hashes: Hashes)
 
-    private fun store(job: ImportJob, staged: Path, draft: NewPublicationDraft, hashes: Hashes) {
+    private fun store(job: ImportJob, staged: Path, draft: PublicationDraft, file: NewFile, warnings: List<String>) {
         val publicationId = library.reservePublicationId()
-        val storedPath = storage.layoutPath(draft.kind, publicationId, draft.title, draft.format)
+        val names = library.layoutNames(draft)
+        val storedPath = storage.layoutPath(
+            Storage.Layout(
+                kind = draft.kind,
+                publicationId = publicationId,
+                title = draft.title,
+                format = file.format,
+                author = names.author,
+                series = names.series,
+                position = draft.series?.positionText,
+            ),
+        )
 
         jobs.recordStoreTarget(job.id, storedPath)
         storage.copyAtomically(staged, storedPath)
 
         transaction(db) {
-            val fileId = with(library) {
-                insertPublicationWithOriginal(
-                    NewPublication(publicationId, draft.kind, draft.title, sortTitle = draft.title),
-                    NewOriginal(draft.format, hashes, storedPath),
-                )
-            }
-            jobs.finishInTransaction(job.id, ImportState.DONE, publicationId = publicationId, fileId = fileId)
+            val fileId = with(library) { insertPublication(publicationId, draft, NewOriginal(file.format, file.hashes, storedPath)) }
+            jobs.finishInTransaction(
+                job.id,
+                ImportState.DONE,
+                warnings = warnings,
+                publicationId = publicationId,
+                fileId = fileId,
+            )
         }
         clearStaging(job)
     }
@@ -123,9 +144,5 @@ class ImportWorker(
     @OptIn(ExperimentalPathApi::class)
     private fun clearStaging(job: ImportJob) {
         storage.staging.resolve(job.id.toString()).deleteRecursively()
-    }
-
-    companion object {
-        fun titleFromFileName(name: String): String = Path.of(name).nameWithoutExtension.trim().ifEmpty { name }
     }
 }

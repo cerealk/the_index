@@ -13,8 +13,11 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import theindex.files.Format
 import theindex.files.Storage
+import theindex.persistence.ContributorTable
+import theindex.persistence.CreditTable
 import theindex.persistence.FileTable
 import theindex.persistence.PublicationTable
+import theindex.publications.Role
 import java.net.URLEncoder
 import java.nio.file.Path
 import java.time.Clock
@@ -75,7 +78,7 @@ class OpdsCatalog(private val db: Database, private val storage: Storage, privat
 
     private fun publicationFeed(id: String, title: String, path: String, page: Int, order: Query.() -> Query): Feed {
         require(page >= 1) { "page must be at least 1" }
-        val (rows, files) = transaction(db) {
+        val (rows, files, credits) = transaction(db) {
             val rows = PublicationTable.selectAll()
                 .where { PublicationTable.trashedAt.isNull() }
                 .order()
@@ -86,9 +89,14 @@ class OpdsCatalog(private val db: Database, private val storage: Storage, privat
             val files = if (ids.isEmpty()) emptyList() else FileTable.selectAll()
                 .where { (FileTable.publicationId inList ids) and FileTable.trashedAt.isNull() }
                 .toList()
-            rows to files
+            val credits = if (ids.isEmpty()) emptyList() else (CreditTable innerJoin ContributorTable).selectAll()
+                .where { CreditTable.publicationId inList ids }
+                .orderBy(CreditTable.position)
+                .toList()
+            Triple(rows, files, credits)
         }
         val filesByPublication = files.groupBy { it[FileTable.publicationId].value }
+        val creditsByPublication = credits.groupBy { it[CreditTable.publicationId].value }
         return Feed(
             id = if (page == 1) id else "$id:page:$page",
             title = title,
@@ -98,16 +106,20 @@ class OpdsCatalog(private val db: Database, private val storage: Storage, privat
             up = ROOT,
             previous = if (page > 1) pageHref(path, page - 1) else null,
             next = if (rows.size > PAGE_SIZE) pageHref(path, page + 1) else null,
-            entries = rows.take(PAGE_SIZE).map { it.toEntry(filesByPublication[it[PublicationTable.id].value].orEmpty()) },
+            entries = rows.take(PAGE_SIZE).map { row ->
+                val id = row[PublicationTable.id].value
+                row.toEntry(filesByPublication[id].orEmpty(), creditsByPublication[id].orEmpty())
+            },
         )
     }
 
-    private fun ResultRow.toEntry(files: List<ResultRow>): PublicationEntry {
+    private fun ResultRow.toEntry(files: List<ResultRow>, credits: List<ResultRow>): PublicationEntry {
         val title = this[PublicationTable.title]
         return PublicationEntry(
             id = "$URN:publication:${this[PublicationTable.id].value}",
             title = title,
             updated = this[PublicationTable.createdAt],
+            authors = authors(credits),
             acquisitions = files
                 .sortedWith(compareBy({ Format.fromDb(it[FileTable.format]) }, { it[FileTable.id].value }))
                 .map { file ->
@@ -115,6 +127,13 @@ class OpdsCatalog(private val db: Database, private val storage: Storage, privat
                     Acquisition(fileHref(file[FileTable.id].value, title, format), format, file[FileTable.size])
                 },
         )
+    }
+
+    /** Authors and comic writers; any other Credit only when there are none of those. */
+    private fun authors(credits: List<ResultRow>): List<String> {
+        val names = credits.map { it[ContributorTable.name] to Role.fromDb(it[CreditTable.role]) }
+        val primary = names.filter { (_, role) -> role == Role.AUTHOR || role == Role.WRITER }.ifEmpty { names.take(1) }
+        return primary.map { it.first }.distinct()
     }
 
     companion object {

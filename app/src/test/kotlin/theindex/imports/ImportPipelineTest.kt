@@ -12,9 +12,12 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import theindex.Fixtures
 import theindex.TestDatabase
+import theindex.files.Format
 import theindex.files.Hasher
+import theindex.files.Storage
 import theindex.persistence.FileTable
 import theindex.persistence.PublicationTable
+import theindex.publications.Kind
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
@@ -127,7 +130,7 @@ class ImportPipelineTest {
         val (jobId) = harness.scanUntilStable()
         harness.drain()
 
-        harness.jobs.find(jobId)!!.kindHint shouldBe theindex.publications.Kind.COMIC
+        harness.jobs.find(jobId)!!.kindHint shouldBe Kind.COMIC
         inboxDir.resolve("comics/batch").exists() shouldBe false
         inboxDir.resolve("comics").exists() shouldBe true
     }
@@ -140,7 +143,7 @@ class ImportPipelineTest {
         // Simulate a crash after the copy, before the rows committed.
         val claimed = harness.jobs.claimNext().shouldNotBeNull()
         val orphan = harness.storage.layoutPath(
-            theindex.publications.Kind.PROSE, harness.library.reservePublicationId(), "Dune", theindex.files.Format.EPUB,
+            Storage.Layout(Kind.PROSE, harness.library.reservePublicationId(), "Dune", Format.EPUB),
         )
         harness.jobs.recordStoreTarget(claimed.id, orphan)
         harness.storage.copyAtomically(harness.worker.stagedFile(claimed), orphan)

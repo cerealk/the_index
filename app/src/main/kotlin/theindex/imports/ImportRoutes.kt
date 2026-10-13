@@ -6,6 +6,7 @@ import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.route
 import kotlinx.serialization.Serializable
+import theindex.metadata.ExtractedMetadata
 
 @Serializable
 data class ImportJobResponse(
@@ -18,6 +19,7 @@ data class ImportJobResponse(
     val warnings: List<String>,
     val publicationId: Long?,
     val fileId: Long?,
+    val metadata: ExtractedMetadata?,
     val createdAt: String,
     val updatedAt: String,
 )
@@ -32,6 +34,7 @@ fun ImportJob.toResponse() = ImportJobResponse(
     warnings = warnings,
     publicationId = publicationId,
     fileId = fileId,
+    metadata = metadata,
     createdAt = createdAt.toString(),
     updatedAt = updatedAt.toString(),
 )

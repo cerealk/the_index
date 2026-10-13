@@ -13,6 +13,7 @@ import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
+import theindex.metadata.ExtractedMetadata
 import theindex.persistence.ImportJobTable
 import theindex.publications.Kind
 import java.time.Clock
@@ -48,6 +49,7 @@ data class ImportJob(
     val reason: String?,
     val warnings: List<String>,
     val storeTarget: String?,
+    val metadata: ExtractedMetadata?,
     val publicationId: Long?,
     val fileId: Long?,
     val createdAt: Instant,
@@ -109,6 +111,14 @@ class ImportJobs(private val db: Database, private val clock: Clock) {
         }
     }
 
+    /** The raw snapshot of what stage 3 extracted (spec §5). */
+    fun recordMetadata(id: Long, metadata: ExtractedMetadata) = transaction(db) {
+        ImportJobTable.update({ ImportJobTable.id eq id }) {
+            it[ImportJobTable.metadata] = metadata
+            it[updatedAt] = clock.instant()
+        }
+    }
+
     fun finish(
         id: Long,
         state: ImportState,
@@ -165,6 +175,7 @@ class ImportJobs(private val db: Database, private val clock: Clock) {
         reason = this[ImportJobTable.reason],
         warnings = this[ImportJobTable.warnings],
         storeTarget = this[ImportJobTable.storeTarget],
+        metadata = this[ImportJobTable.metadata],
         publicationId = this[ImportJobTable.publicationId]?.value,
         fileId = this[ImportJobTable.fileId]?.value,
         createdAt = this[ImportJobTable.createdAt],
