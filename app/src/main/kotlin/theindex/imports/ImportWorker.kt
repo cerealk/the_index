@@ -25,7 +25,7 @@ import kotlin.io.path.ExperimentalPathApi
  */
 class ImportWorker(
     private val db: Database,
-    private val jobs: ImportwJobs,
+    private val jobs: ImportJobs,
     private val library: Library,
     private val storage: Storage,
 ) {
