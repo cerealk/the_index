@@ -50,6 +50,8 @@ data class ReadingListDraft(val name: String, val number: String?)
 
 data class NewOriginal(val format: Format, val hashes: Hashes, val storedPath: String, val pageCount: Int? = null)
 
+data class StoredFile(val id: Long, val publicationId: Long, val storedPath: String, val pageCount: Int?)
+
 /** Publications, their Files and the Contributors, Series and Tags they refer to (spec §3). */
 class Library(private val db: Database, private val clock: Clock) {
 
@@ -68,6 +70,40 @@ class Library(private val db: Database, private val clock: Clock) {
 
     fun isStored(storedPath: String): Boolean = transaction(db) {
         FileTable.selectAll().where { FileTable.storedPath eq storedPath }.any()
+    }
+
+    fun storedFile(id: Long): StoredFile = transaction(db) {
+        FileTable.selectAll().where { FileTable.id eq id }.single().let {
+            StoredFile(it[FileTable.id].value, it[FileTable.publicationId].value, it[FileTable.storedPath], it[FileTable.pageCount])
+        }
+    }
+
+    /** cbr Originals outside the Trash with no Conversion, e.g. after a crash or a failed conversion (spec §5 stage 7). */
+    fun cbrOriginalsWithoutConversion(): List<Long> = transaction(db) {
+        exec(
+            """
+            SELECT o.id FROM file o
+            WHERE o.format = 'cbr' AND o.role = 'original' AND o.trashed_at IS NULL
+              AND NOT EXISTS (SELECT 1 FROM file c WHERE c.derived_from = o.id)
+            ORDER BY o.id
+            """.trimIndent(),
+        ) { rows -> buildList { while (rows.next()) add(rows.getLong(1)) } } ?: emptyList()
+    }
+
+    /** Records a cbz Conversion stored next to its Original; returns the new File id. */
+    fun insertConversion(original: StoredFile, hashes: Hashes, storedPath: String): Long = transaction(db) {
+        FileTable.insertAndGetId {
+            it[publicationId] = original.publicationId
+            it[format] = Format.CBZ.dbValue
+            it[size] = hashes.size
+            it[sha256] = hashes.sha256
+            it[partialMd5] = hashes.partialMd5
+            it[role] = "conversion"
+            it[derivedFrom] = original.id
+            it[pageCount] = original.pageCount
+            it[FileTable.storedPath] = storedPath
+            it[importedAt] = clock.instant()
+        }.value
     }
 
     /**

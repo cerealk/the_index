@@ -27,7 +27,7 @@ From [Which server stack?](issues/04-stack-choice.md) and [Docker container or p
 | DI | Koin |
 | Serialization | kotlinx.serialization |
 | Tests | JUnit 5 + Kotest assertions, Ktor `testApplication`, Testcontainers Postgres (singleton, reused between runs, per-test cleanup) |
-| Archive/PDF | junrar 8.x (behind a seam, optional `7z`/`bsdtar` fallback), PDFBox 3 (+ xmpbox, jbig2-imageio), zip + jsoup in XML mode |
+| Archive/PDF | junrar 8.x (behind a seam; pure JVM, no external `7z`/`bsdtar` fallback, user's decision 2026-10-17), PDFBox 3 (+ xmpbox, jbig2-imageio), zip + jsoup in XML mode |
 | Deployment | Docker Compose: an `app` service (image built from the Gradle project) and a `postgres` service (official image). Storage, inbox and Postgres data are on mounted volumes. Any Docker host. |
 
 Logging, config-file format, the image build method (Dockerfile or Jib), the volume type and the port mapping are left to the implementer.
