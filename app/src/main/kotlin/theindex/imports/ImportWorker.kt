@@ -10,11 +10,15 @@ import theindex.files.Hashes
 import theindex.files.Storage
 import theindex.metadata.CbzRepack
 import theindex.metadata.ComicArchive
+import theindex.metadata.Extraction
 import theindex.metadata.Extractors
 import theindex.metadata.RarComicArchive
 import theindex.metadata.UnreadableFileException
 import theindex.publications.Kind
 import theindex.publications.Library
+import theindex.publications.Matcher
+import theindex.publications.StrongMatch
+import theindex.publications.WeakMatch
 import theindex.publications.Names
 import theindex.publications.NewOriginal
 import theindex.publications.PublicationDraft
@@ -28,17 +32,22 @@ import kotlin.io.path.ExperimentalPathApi
 /** Writes a comic archive's entries into a new cbz at the given path. */
 typealias Converter = (ComicArchive, Path) -> Unit
 
+/** Stage 3: what a File of the given Format holds. */
+typealias Extractor = (Format, Path) -> Extraction
+
 /**
  * Runs Import jobs through the pipeline one at a time (spec §5). Implemented stages:
- * detect Format, hash (exact duplicates skipped), extract metadata, decide Kind, store the Original,
- * convert cbr to cbz.
+ * detect Format, hash (exact duplicates skipped), extract metadata, decide Kind, match an existing
+ * Publication, store the Original (new or attached), convert cbr to cbz.
  */
 class ImportWorker(
     private val db: Database,
     private val jobs: ImportJobs,
     private val library: Library,
     private val storage: Storage,
+    private val matcher: Matcher,
     private val convert: Converter = CbzRepack::repack,
+    private val extract: Extractor = Extractors::extract,
 ) {
     private val log = LoggerFactory.getLogger(ImportWorker::class.java)
 
@@ -96,7 +105,7 @@ class ImportWorker(
 
         // Stage 3: metadata, kept on the job as a raw snapshot.
         val extraction = try {
-            Extractors.extract(format, staged)
+            extract(format, staged)
         } catch (e: UnreadableFileException) {
             return fail(job, e.message ?: "cannot open the file")
         }
@@ -106,8 +115,13 @@ class ImportWorker(
         val kind = job.kindHint ?: Kind.defaultFor(format)
         val (draft, warnings) = Drafts.from(extraction.metadata, kind, job.originalName)
 
-        // Stage 6: store the Original.
-        val fileId = store(job, staged, draft, NewFile(format, hashes, extraction.pageCount), warnings)
+        // Stage 5: match an existing Publication; stage 6: store the Original.
+        val file = NewFile(format, hashes, extraction.pageCount)
+        val fileId = when (val match = matcher.match(draft)) {
+            is StrongMatch -> attach(job, staged, match, draft, file, warnings)
+            is WeakMatch -> store(job, staged, draft, file, warnings + "possible duplicate of Publication ${match.publicationId}", match.publicationId)
+            null -> store(job, staged, draft, file, warnings)
+        }
 
         // Stage 7: every cbr Original gets a cbz Conversion; failing that is only a warning.
         if (format == Format.CBR) convertOriginal(fileId)?.let { jobs.addWarning(job.id, it) }
@@ -115,8 +129,15 @@ class ImportWorker(
 
     private data class NewFile(val format: Format, val hashes: Hashes, val pageCount: Int?)
 
-    /** Returns the stored Original's File id. */
-    private fun store(job: ImportJob, staged: Path, draft: PublicationDraft, file: NewFile, warnings: List<String>): Long {
+    /** Stores the Original as a new Publication; returns its File id. */
+    private fun store(
+        job: ImportJob,
+        staged: Path,
+        draft: PublicationDraft,
+        file: NewFile,
+        warnings: List<String>,
+        possibleDuplicateOf: Long? = null,
+    ): Long {
         val publicationId = library.reservePublicationId()
         val names = library.layoutNames(draft)
         val storedPath = storage.layoutPath(
@@ -136,7 +157,8 @@ class ImportWorker(
         storage.copyAtomically(staged, storedPath)
 
         val fileId = transaction(db) {
-            val fileId = with(library) { insertPublication(publicationId, draft, NewOriginal(file.format, file.hashes, storedPath, file.pageCount)) }
+            val original = NewOriginal(file.format, file.hashes, storedPath, file.pageCount)
+            val fileId = with(library) { insertPublication(publicationId, draft, original, possibleDuplicateOf) }
             jobs.finishInTransaction(
                 job.id,
                 ImportState.DONE,
@@ -151,12 +173,44 @@ class ImportWorker(
     }
 
     /**
+     * Stores the Original in a strongly matched Publication's folder, next to its Files and named
+     * like them (spec §4), filling only that Publication's empty fields. Returns the File id.
+     */
+    private fun attach(job: ImportJob, staged: Path, match: StrongMatch, draft: PublicationDraft, file: NewFile, warnings: List<String>): Long {
+        val (folder, name) = library.publicationFolder(match.publicationId)
+        val storedPath = freePath(folder, name, file.format)
+
+        jobs.recordStoreTarget(job.id, storedPath)
+        storage.copyAtomically(staged, storedPath)
+
+        val fileId = transaction(db) {
+            val original = NewOriginal(file.format, file.hashes, storedPath, file.pageCount)
+            val fileId = with(library) { attachOriginal(match.publicationId, draft, original) }
+            jobs.finishInTransaction(
+                job.id,
+                ImportState.DONE,
+                reason = "attached to Publication ${match.publicationId}: ${match.reason}",
+                warnings = warnings,
+                publicationId = match.publicationId,
+                fileId = fileId,
+            )
+            fileId
+        }
+        clearStaging(job)
+        return fileId
+    }
+
+    /**
      * Repacks a cbr Original into a cbz Conversion next to it (spec §5 stage 7), built in
      * staging and then moved in like any stored File. Returns a warning when it can't.
      */
     private fun convertOriginal(originalId: Long): String? {
         val original = library.storedFile(originalId)
-        val target = original.storedPath.substringBeforeLast('.') + "." + Format.CBZ.extension
+        val target = freePath(
+            folder = original.storedPath.substringBeforeLast('/'),
+            name = original.storedPath.substringAfterLast('/').substringBeforeLast('.'),
+            format = Format.CBZ,
+        )
         val built = storage.staging.resolve("conversion-$originalId.${Format.CBZ.extension}")
         return try {
             Files.createDirectories(built.parent)
@@ -173,6 +227,15 @@ class ImportWorker(
             built.deleteIfExists()
         }
     }
+
+    /**
+     * `<name>.<ext>` in [folder], or `<name> (2).<ext>`, `(3)`… when a File already has that path:
+     * a new File never replaces one. An unrecorded leftover from a crash is fair game.
+     */
+    private fun freePath(folder: String, name: String, format: Format): String =
+        generateSequence(1) { it + 1 }
+            .map { n -> "$folder/${if (n == 1) name else "$name ($n)"}.${format.extension}" }
+            .first { !library.isStored(it) }
 
     /** A failed job keeps its file in `failed/<jobId>/` so it can be fixed and dropped in again. */
     private fun fail(job: ImportJob, reason: String) {

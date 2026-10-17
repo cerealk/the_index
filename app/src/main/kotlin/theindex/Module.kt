@@ -30,6 +30,7 @@ import theindex.opds.opdsRoutes
 import theindex.persistence.dataSource
 import theindex.persistence.migrate
 import theindex.publications.Library
+import theindex.publications.Matcher
 import java.nio.file.Files
 import java.time.Clock
 import javax.sql.DataSource
@@ -44,7 +45,8 @@ fun appModule(config: AppConfig, clock: Clock = Clock.systemUTC()) = module {
     single { Storage(config.storageDir) }
     single { ImportJobs(get(), get()) }
     single { Library(get(), get()) }
-    single { ImportWorker(get(), get(), get(), get()) }
+    single { Matcher(get()) }
+    single { ImportWorker(get(), get(), get(), get(), get()) }
     single { Inbox(config.inboxDir, get(), get(), get(), config.inboxStabilityWindow) }
     single { OpdsCatalog(get(), get(), get()) }
 }

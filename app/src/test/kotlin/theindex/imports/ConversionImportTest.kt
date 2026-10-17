@@ -112,7 +112,7 @@ class ConversionImportTest {
         job.warnings.last() shouldBe "cbz Conversion failed: disk full"
         files(job.publicationId!!).map { it.format } shouldBe listOf(Format.CBR)
 
-        ImportWorker(harness.db, harness.jobs, harness.library, harness.storage).recover()
+        ImportWorker(harness.db, harness.jobs, harness.library, harness.storage, harness.matcher).recover()
 
         val (original, conversion) = files(job.publicationId)
         conversion.derivedFrom shouldBe original.id
