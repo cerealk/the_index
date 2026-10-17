@@ -46,6 +46,9 @@ object Names {
 
     fun tagKey(name: String): String = fold(name)
 
+    /** Titles match the way names do: "DUNE" and "Dune" are the same title. */
+    fun titleKey(title: String): String = fold(title)
+
     fun readingListKey(name: String): String = fold(name)
 
     /** The title of a comic issue that has none of its own: "Saga #7", or the Series name without a position. */

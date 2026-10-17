@@ -8,6 +8,7 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import theindex.files.Format
 import theindex.files.Hashes
 import theindex.metadata.ExtractedIdentifier
@@ -127,10 +128,16 @@ class Library(private val db: Database, private val clock: Clock) {
         ContributorTable.selectAll().where { ContributorTable.matchKey eq Names.contributorKey(name) }
             .singleOrNull()?.get(ContributorTable.name)
 
-    /** Inserts a new Publication with its first Original; returns the File id. Runs inside the caller's transaction. */
-    fun JdbcTransaction.insertPublication(id: Long, draft: PublicationDraft, original: NewOriginal): Long {
-        val now = clock.instant()
-        val seriesId = draft.series?.let { findOrCreateSeries(it) }
+    /**
+     * Inserts a new Publication with its first Original; returns the File id. Runs inside the
+     * caller's transaction. [possibleDuplicateOf] flags a weak match (spec §5 stage 5).
+     */
+    fun JdbcTransaction.insertPublication(
+        id: Long,
+        draft: PublicationDraft,
+        original: NewOriginal,
+        possibleDuplicateOf: Long? = null,
+    ): Long {
         PublicationTable.insert {
             it[PublicationTable.id] = id
             it[kind] = draft.kind.dbValue
@@ -140,42 +147,99 @@ class Library(private val db: Database, private val clock: Clock) {
             it[publisher] = draft.publisher
             it[language] = draft.language
             it[publicationDate] = draft.publicationDate
-            it[PublicationTable.seriesId] = seriesId
+            it[seriesId] = draft.series?.let { series -> findOrCreateSeries(series) }
             it[seriesPositionText] = draft.series?.positionText
             it[seriesPositionSort] = draft.series?.positionText?.let(Names::positionSortKey)
-            it[createdAt] = now
+            it[PublicationTable.possibleDuplicateOf] = possibleDuplicateOf
+            it[createdAt] = clock.instant()
         }
-        val credits = draft.credits.map { findOrCreateContributor(it) to it.role }.distinct()
-        CreditTable.batchInsert(credits.withIndex()) { (position, credit) ->
-            this[CreditTable.publicationId] = id
+        insertCredits(id, draft.credits)
+        insertTags(id, draft.tags)
+        insertIdentifiers(id, draft.identifiers)
+        joinReadingLists(id, draft.readingLists)
+        return insertOriginal(id, original)
+    }
+
+    /**
+     * Attaches a strongly matched File to an existing Publication (spec §5 stage 5). The draft
+     * fills empty fields only, and never overwrites. Returns the File id. Runs inside the caller's transaction.
+     */
+    fun JdbcTransaction.attachOriginal(publicationId: Long, draft: PublicationDraft, original: NewOriginal): Long {
+        val publication = PublicationTable.selectAll().where { PublicationTable.id eq publicationId }.single()
+        val fillSeries = publication[PublicationTable.seriesId] == null && draft.series != null
+        PublicationTable.update({ PublicationTable.id eq publicationId }) {
+            if (publication[description] == null) it[description] = draft.description
+            if (publication[publisher] == null) it[publisher] = draft.publisher
+            if (publication[language] == null) it[language] = draft.language
+            if (publication[publicationDate] == null) it[publicationDate] = draft.publicationDate
+            if (fillSeries) {
+                it[seriesId] = findOrCreateSeries(draft.series!!)
+                it[seriesPositionText] = draft.series.positionText
+                it[seriesPositionSort] = draft.series.positionText?.let(Names::positionSortKey)
+            }
+        }
+        if (CreditTable.selectAll().where { CreditTable.publicationId eq publicationId }.empty()) insertCredits(publicationId, draft.credits)
+        if (PublicationTagTable.selectAll().where { PublicationTagTable.publicationId eq publicationId }.empty()) insertTags(publicationId, draft.tags)
+        if (IdentifierTable.selectAll().where { IdentifierTable.publicationId eq publicationId }.empty()) {
+            insertIdentifiers(publicationId, draft.identifiers)
+        }
+        if (ReadingListEntryTable.selectAll().where { ReadingListEntryTable.publicationId eq publicationId }.empty()) {
+            joinReadingLists(publicationId, draft.readingLists)
+        }
+        return insertOriginal(publicationId, original)
+    }
+
+    /** The folder holding a Publication's Files and the name its Files share, from its first File (spec §4). */
+    fun publicationFolder(publicationId: Long): FolderAndName = transaction(db) {
+        val path = FileTable.selectAll().where { FileTable.publicationId eq publicationId }.orderBy(FileTable.id)
+            .first()[FileTable.storedPath]
+        FolderAndName(path.substringBeforeLast('/'), path.substringAfterLast('/').substringBeforeLast('.'))
+    }
+
+    data class FolderAndName(val folder: String, val name: String)
+
+    private fun insertCredits(publicationId: Long, credits: List<CreditDraft>) {
+        val rows = credits.map { findOrCreateContributor(it) to it.role }.distinct()
+        CreditTable.batchInsert(rows.withIndex()) { (position, credit) ->
+            this[CreditTable.publicationId] = publicationId
             this[CreditTable.position] = position
             this[CreditTable.contributorId] = credit.first
             this[CreditTable.role] = credit.second.dbValue
         }
-        PublicationTagTable.batchInsert(draft.tags.map { findOrCreateTag(it) }.distinct()) { tagId ->
-            this[PublicationTagTable.publicationId] = id
+    }
+
+    private fun insertTags(publicationId: Long, tags: List<String>) {
+        PublicationTagTable.batchInsert(tags.map { findOrCreateTag(it) }.distinct()) { tagId ->
+            this[PublicationTagTable.publicationId] = publicationId
             this[PublicationTagTable.tagId] = tagId
         }
-        IdentifierTable.batchInsert(draft.identifiers.distinct()) { identifier ->
-            this[IdentifierTable.publicationId] = id
+    }
+
+    private fun insertIdentifiers(publicationId: Long, identifiers: List<ExtractedIdentifier>) {
+        IdentifierTable.batchInsert(identifiers.distinct()) { identifier ->
+            this[IdentifierTable.publicationId] = publicationId
             this[IdentifierTable.type] = identifier.type
             this[IdentifierTable.value] = identifier.value
         }
-        draft.readingLists.distinctBy { Names.readingListKey(it.name) }.forEach { list ->
-            joinReadingList(findOrCreateReadingList(list.name), id, list.number?.let(Names::positionSortKey))
-        }
-        return FileTable.insertAndGetId {
-            it[publicationId] = id
-            it[format] = original.format.dbValue
-            it[size] = original.hashes.size
-            it[sha256] = original.hashes.sha256
-            it[partialMd5] = original.hashes.partialMd5
-            it[role] = "original"
-            it[pageCount] = original.pageCount
-            it[storedPath] = original.storedPath
-            it[importedAt] = now
-        }.value
     }
+
+    private fun JdbcTransaction.joinReadingLists(publicationId: Long, lists: List<ReadingListDraft>) {
+        lists.distinctBy { Names.readingListKey(it.name) }.forEach { list ->
+            joinReadingList(findOrCreateReadingList(list.name), publicationId, list.number?.let(Names::positionSortKey))
+        }
+    }
+
+    private fun insertOriginal(publicationId: Long, original: NewOriginal): Long = FileTable.insertAndGetId {
+        it[FileTable.publicationId] = publicationId
+        it[format] = original.format.dbValue
+        it[size] = original.hashes.size
+        it[sha256] = original.hashes.sha256
+        it[partialMd5] = original.hashes.partialMd5
+        it[role] = "original"
+        it[pageCount] = original.pageCount
+        it[storedPath] = original.storedPath
+        it[importedAt] = clock.instant()
+    }.value
 
     /**
      * Places a numbered entry before the first entry with a higher number, and appends an

@@ -20,6 +20,7 @@ object PublicationTable : LongIdTable("publication") {
     val seriesId = reference("series_id", SeriesTable).nullable()
     val seriesPositionText = text("series_position_text").nullable()
     val seriesPositionSort = decimal("series_position_sort", 20, 6).nullable()
+    val possibleDuplicateOf = reference("possible_duplicate_of", PublicationTable).nullable()
 }
 
 object FileTable : LongIdTable("file") {

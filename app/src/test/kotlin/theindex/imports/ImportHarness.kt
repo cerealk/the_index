@@ -4,9 +4,11 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import theindex.TestDatabase
 import theindex.files.Storage
 import theindex.metadata.CbzRepack
+import theindex.metadata.Extractors
 import theindex.persistence.dataSource
 import theindex.persistence.migrate
 import theindex.publications.Library
+import theindex.publications.Matcher
 import java.nio.file.Files
 import java.time.Clock
 import java.time.Duration
@@ -23,7 +25,10 @@ class MutableClock(private var now: Instant = Instant.parse("2026-10-12T10:00:00
 }
 
 /** The import pipeline wired against the test database and fresh temp directories. */
-class ImportHarness(convert: Converter = CbzRepack::repack) {
+class ImportHarness(
+    convert: Converter = CbzRepack::repack,
+    extract: Extractor = Extractors::extract,
+) {
     val config = TestDatabase.config()
     val clock = MutableClock()
     private val dataSource = dataSource(config.database).also { migrate(it) }
@@ -31,7 +36,8 @@ class ImportHarness(convert: Converter = CbzRepack::repack) {
     val storage = Storage(config.storageDir).also { it.createDirectories() }
     val jobs = ImportJobs(db, clock)
     val library = Library(db, clock)
-    val worker = ImportWorker(db, jobs, library, storage, convert)
+    val matcher = Matcher(db)
+    val worker = ImportWorker(db, jobs, library, storage, matcher, convert, extract)
     val inbox = Inbox(config.inboxDir, jobs, storage, clock, STABILITY)
 
     init {
