@@ -71,7 +71,7 @@ class ImportPipelineTest {
         harness.drain()
 
         val job = harness.jobs.find(jobId).shouldNotBeNull()
-        harness.storage.resolve("comics/Saga 001 (${job.publicationId})/Saga 001.cbz").exists() shouldBe true
+        harness.storage.resolve("comics/Saga/Saga #1 (${job.publicationId})/Saga #1.cbz").exists() shouldBe true
     }
 
     @Test

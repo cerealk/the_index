@@ -88,3 +88,16 @@ object IdentifierTable : Table("identifier") {
     val value = text("value")
     override val primaryKey = PrimaryKey(publicationId, type, value)
 }
+
+object ReadingListTable : LongIdTable("reading_list") {
+    val name = text("name")
+    val matchKey = text("match_key")
+}
+
+object ReadingListEntryTable : Table("reading_list_entry") {
+    val readingListId = reference("reading_list_id", ReadingListTable)
+    val publicationId = reference("publication_id", PublicationTable)
+    val position = integer("position")
+    val numberSort = decimal("number_sort", 20, 6).nullable()
+    override val primaryKey = PrimaryKey(readingListId, publicationId)
+}

@@ -12,6 +12,7 @@ import theindex.metadata.Extractors
 import theindex.metadata.UnreadableFileException
 import theindex.publications.Kind
 import theindex.publications.Library
+import theindex.publications.Names
 import theindex.publications.NewOriginal
 import theindex.publications.PublicationDraft
 import java.nio.file.Files
@@ -81,22 +82,22 @@ class ImportWorker(
         }
 
         // Stage 3: metadata, kept on the job as a raw snapshot.
-        val metadata = try {
+        val extraction = try {
             Extractors.extract(format, staged)
         } catch (e: UnreadableFileException) {
             return fail(job, e.message ?: "cannot open the file")
         }
-        jobs.recordMetadata(job.id, metadata)
+        jobs.recordMetadata(job.id, extraction.metadata)
 
         // Stage 4: Kind, from the hint or the Format until inference exists.
         val kind = job.kindHint ?: Kind.defaultFor(format)
-        val (draft, warnings) = Drafts.from(metadata, kind, job.originalName)
+        val (draft, warnings) = Drafts.from(extraction.metadata, kind, job.originalName)
 
         // Stage 6: store the Original.
-        store(job, staged, draft, NewFile(format, hashes), warnings)
+        store(job, staged, draft, NewFile(format, hashes, extraction.pageCount), warnings)
     }
 
-    private data class NewFile(val format: Format, val hashes: Hashes)
+    private data class NewFile(val format: Format, val hashes: Hashes, val pageCount: Int?)
 
     private fun store(job: ImportJob, staged: Path, draft: PublicationDraft, file: NewFile, warnings: List<String>) {
         val publicationId = library.reservePublicationId()
@@ -110,6 +111,7 @@ class ImportWorker(
                 author = names.author,
                 series = names.series,
                 position = draft.series?.positionText,
+                untitledIssue = draft.series?.let { draft.title == Names.issueTitle(it.name, it.positionText) } ?: false,
             ),
         )
 
@@ -117,7 +119,7 @@ class ImportWorker(
         storage.copyAtomically(staged, storedPath)
 
         transaction(db) {
-            val fileId = with(library) { insertPublication(publicationId, draft, NewOriginal(file.format, file.hashes, storedPath)) }
+            val fileId = with(library) { insertPublication(publicationId, draft, NewOriginal(file.format, file.hashes, storedPath, file.pageCount)) }
             jobs.finishInTransaction(
                 job.id,
                 ImportState.DONE,

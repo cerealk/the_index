@@ -53,6 +53,14 @@ $metadata
         write(byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte()))
     }
 
+    /** A cbz holding exactly [entries], in order. */
+    fun cbzEntries(vararg entries: Pair<String, ByteArray>): ByteArray = zip {
+        entries.forEach { (name, content) ->
+            putNextEntry(ZipEntry(name))
+            write(content)
+        }
+    }
+
     fun pdf(salt: String = ""): ByteArray = "%PDF-1.4\n% $salt\n%%EOF\n".toByteArray()
 
     /** Just the RAR 5 signature and some bytes: enough for Format detection. */

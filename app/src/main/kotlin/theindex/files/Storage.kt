@@ -27,7 +27,8 @@ class Storage(val root: Path) {
     /**
      * Where a Publication's File lives, relative to [root] (spec §4):
      * - prose: `prose/<Author>/<Series>/<NN> - <Title> (<id>)/<Title>.<ext>`, or `prose/<Author>/<Title> (<id>)/…`
-     * - comic: `comics/<Series>/<Series> #<Number> - <Title> (<id>)/<same name>.<ext>`, or `comics/<Title> (<id>)/…`
+     * - comic: `comics/<Series>/<Series> #<Number> - <Title> (<id>)/<same name>.<ext>`, or `comics/<Title> (<id>)/…`;
+     *   an untitled issue drops ` - <Title>`.
      */
     fun layoutPath(layout: Layout): String {
         val title = segment(layout.title)
@@ -48,7 +49,8 @@ class Storage(val root: Path) {
                 if (series == null) {
                     "comics/$title ($id)/$title.$ext"
                 } else {
-                    val name = segment(if (position == null) "$series - $title" else "$series #$position - $title")
+                    val issue = if (position == null) series else "$series #$position"
+                    val name = segment(if (layout.untitledIssue) issue else "$issue - $title")
                     "comics/$series/$name ($id)/$name.$ext"
                 }
             }
@@ -98,6 +100,8 @@ class Storage(val root: Path) {
         val author: String? = null,
         val series: String? = null,
         val position: String? = null,
+        /** The title only repeats the Series and number ("Saga #12"), so the folder leaves it out. */
+        val untitledIssue: Boolean = false,
     )
 
     companion object {

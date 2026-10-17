@@ -1,10 +1,12 @@
 package theindex.imports
 
+import theindex.metadata.ComicFileName
 import theindex.metadata.ExtractedMetadata
 import theindex.publications.CreditDraft
 import theindex.publications.Kind
 import theindex.publications.Names
 import theindex.publications.PublicationDraft
+import theindex.publications.ReadingListDraft
 import theindex.publications.Role
 import theindex.publications.SeriesDraft
 import java.nio.file.Path
@@ -17,8 +19,12 @@ data class DraftResult(val draft: PublicationDraft, val warnings: List<String>)
 object Drafts {
     fun from(metadata: ExtractedMetadata, kind: Kind, originalName: String): DraftResult {
         val warnings = mutableListOf<String>()
+        if (metadata.source == ComicFileName.SOURCE) warnings += "no ComicInfo.xml, the file name was parsed"
 
+        val series = metadata.series?.takeIf { it.name.isNotBlank() }
+            ?.let { SeriesDraft(it.name.trim(), it.volume, it.position) }
         val title = metadata.title?.takeIf { it.isNotBlank() }?.trim()
+            ?: series?.takeIf { kind == Kind.COMIC }?.let { Names.issueTitle(it.name, it.positionText) }
             ?: titleFromFileName(originalName).also { warnings += "no title in the metadata, the file name was used" }
         val contributors = metadata.contributors.filter { it.name.isNotBlank() && it.name.trim().lowercase() !in PLACEHOLDER_NAMES }
         if (contributors.isEmpty()) warnings += "no Contributors in the metadata"
@@ -40,19 +46,19 @@ object Drafts {
                 title = title,
                 sortTitle = metadata.sortTitle ?: Names.deriveSortTitle(title, metadata.language),
                 credits = credits,
-                series = metadata.series?.takeIf { it.name.isNotBlank() }
-                    ?.let { SeriesDraft(it.name.trim(), it.volume, it.position) },
+                series = series,
                 tags = metadata.tags.filter { it.isNotBlank() },
                 description = metadata.description,
                 publisher = metadata.publisher,
                 language = metadata.language,
                 publicationDate = metadata.publicationDate,
                 identifiers = metadata.identifiers,
+                readingLists = metadata.readingLists.filter { it.name.isNotBlank() }
+                    .map { ReadingListDraft(it.name.trim(), it.number) },
             ),
             warnings,
         )
     }
-
     /** What tools write when they know no author; these are not Contributors. */
     private val PLACEHOLDER_NAMES = setOf("unknown", "unknown author", "sconosciuto", "autore sconosciuto", "inconnu")
 

@@ -1,5 +1,6 @@
 package theindex.files
 
+import theindex.metadata.ComicArchive
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.zip.ZipFile
@@ -23,7 +24,6 @@ object FormatDetector {
     private val PDF_MAGIC = "%PDF-".toByteArray()
     private val RAR_MAGIC = byteArrayOf(0x52, 0x61, 0x72, 0x21, 0x1A, 0x07) // "Rar!\u001A\u0007"
     private val ZIP_MAGIC = byteArrayOf(0x50, 0x4B, 0x03, 0x04)
-    private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "gif", "webp", "avif", "jxl", "bmp")
 
     fun detect(path: Path): Format? {
         val head = Files.newInputStream(path).use { it.readNBytes(8) }
@@ -42,7 +42,7 @@ object FormatDetector {
                 ?.let { entry -> zip.getInputStream(entry).use { String(it.readNBytes(64)).trim() } }
             when {
                 mimetype == "application/epub+zip" -> Format.EPUB
-                zip.entries().asSequence().any { !it.isDirectory && it.name.substringAfterLast('.').lowercase() in IMAGE_EXTENSIONS } -> Format.CBZ
+                zip.entries().asSequence().any { !it.isDirectory && ComicArchive.isPage(it.name) } -> Format.CBZ
                 else -> null
             }
         }

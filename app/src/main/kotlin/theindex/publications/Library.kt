@@ -17,8 +17,11 @@ import theindex.persistence.FileTable
 import theindex.persistence.IdentifierTable
 import theindex.persistence.PublicationTable
 import theindex.persistence.PublicationTagTable
+import theindex.persistence.ReadingListEntryTable
+import theindex.persistence.ReadingListTable
 import theindex.persistence.SeriesTable
 import theindex.persistence.TagTable
+import java.math.BigDecimal
 import java.time.Clock
 
 /** A new Publication's fields, with Contributors, Series and Tags still given by name. */
@@ -34,6 +37,7 @@ data class PublicationDraft(
     val language: String? = null,
     val publicationDate: String? = null,
     val identifiers: List<ExtractedIdentifier> = emptyList(),
+    val readingLists: List<ReadingListDraft> = emptyList(),
 )
 
 /** [sortName] is used only when the Contributor is new. */
@@ -41,7 +45,10 @@ data class CreditDraft(val name: String, val sortName: String, val role: Role)
 
 data class SeriesDraft(val name: String, val volume: Int?, val positionText: String?)
 
-data class NewOriginal(val format: Format, val hashes: Hashes, val storedPath: String)
+/** A Reading List to join by name; [number] places the Publication among the list's numbered entries. */
+data class ReadingListDraft(val name: String, val number: String?)
+
+data class NewOriginal(val format: Format, val hashes: Hashes, val storedPath: String, val pageCount: Int? = null)
 
 /** Publications, their Files and the Contributors, Series and Tags they refer to (spec §3). */
 class Library(private val db: Database, private val clock: Clock) {
@@ -118,6 +125,9 @@ class Library(private val db: Database, private val clock: Clock) {
             this[IdentifierTable.type] = identifier.type
             this[IdentifierTable.value] = identifier.value
         }
+        draft.readingLists.distinctBy { Names.readingListKey(it.name) }.forEach { list ->
+            joinReadingList(findOrCreateReadingList(list.name), id, list.number?.let(Names::positionSortKey))
+        }
         return FileTable.insertAndGetId {
             it[publicationId] = id
             it[format] = original.format.dbValue
@@ -125,9 +135,39 @@ class Library(private val db: Database, private val clock: Clock) {
             it[sha256] = original.hashes.sha256
             it[partialMd5] = original.hashes.partialMd5
             it[role] = "original"
+            it[pageCount] = original.pageCount
             it[storedPath] = original.storedPath
             it[importedAt] = now
         }.value
+    }
+
+    /**
+     * Places a numbered entry before the first entry with a higher number, and appends an
+     * unnumbered one (spec §3). Unnumbered entries, and the reader's own reordering, stay put.
+     */
+    private fun JdbcTransaction.joinReadingList(listId: Long, publicationId: Long, number: BigDecimal?) {
+        val entries = ReadingListEntryTable.selectAll().where { ReadingListEntryTable.readingListId eq listId }
+            .orderBy(ReadingListEntryTable.position)
+            .map { it[ReadingListEntryTable.position] to it[ReadingListEntryTable.numberSort] }
+        val position = number
+            ?.let { entries.firstOrNull { (_, other) -> other != null && other > number }?.first }
+            ?: ((entries.lastOrNull()?.first ?: -1) + 1)
+        exec("UPDATE reading_list_entry SET position = position + 1 WHERE reading_list_id = $listId AND position >= $position")
+        ReadingListEntryTable.insert {
+            it[readingListId] = listId
+            it[ReadingListEntryTable.publicationId] = publicationId
+            it[ReadingListEntryTable.position] = position
+            it[numberSort] = number
+        }
+    }
+
+    private fun findOrCreateReadingList(name: String): Long {
+        val key = Names.readingListKey(name)
+        return ReadingListTable.selectAll().where { ReadingListTable.matchKey eq key }.singleOrNull()?.get(ReadingListTable.id)?.value
+            ?: ReadingListTable.insertAndGetId {
+                it[ReadingListTable.name] = name.trim()
+                it[matchKey] = key
+            }.value
     }
 
     /** Normalized exact match, otherwise a new Contributor (spec §3). */

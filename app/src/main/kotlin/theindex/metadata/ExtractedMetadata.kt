@@ -24,6 +24,8 @@ data class ExtractedMetadata(
     /** Partial date: `yyyy`, `yyyy-MM` or `yyyy-MM-dd`. */
     val publicationDate: String? = null,
     val identifiers: List<ExtractedIdentifier> = emptyList(),
+    /** Comic story arcs (ComicInfo `StoryArc`), each a Reading List to join. */
+    val readingLists: List<ExtractedReadingList> = emptyList(),
 ) {
     companion object {
         val NONE = ExtractedMetadata(source = "none")
@@ -43,6 +45,13 @@ data class ExtractedSeries(val name: String, val position: String? = null, val v
 
 @Serializable
 data class ExtractedIdentifier(val type: String, val value: String)
+
+/** [number] is the issue's place in the list as the source writes it (ComicInfo `StoryArcNumber`). */
+@Serializable
+data class ExtractedReadingList(val name: String, val number: String? = null)
+
+/** What stage 3 reads from one File: its metadata, and its page count when the Format has pages. */
+data class Extraction(val metadata: ExtractedMetadata, val pageCount: Int? = null)
 
 /** The File can't be read as its Format (corrupt or encrypted): the Import fails (spec §5 stage 3). */
 class UnreadableFileException(message: String, cause: Throwable? = null) : Exception(message, cause)

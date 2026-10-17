@@ -46,6 +46,12 @@ object Names {
 
     fun tagKey(name: String): String = fold(name)
 
+    fun readingListKey(name: String): String = fold(name)
+
+    /** The title of a comic issue that has none of its own: "Saga #7", or the Series name without a position. */
+    fun issueTitle(seriesName: String, positionText: String?): String =
+        if (positionText == null) seriesName else "$seriesName #$positionText"
+
     /** Leading articles moved to the end, by language; English ones when the language is unknown. */
     private val ARTICLES = mapOf(
         "en" to listOf("the", "a", "an"),

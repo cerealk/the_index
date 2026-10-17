@@ -31,6 +31,13 @@ class StorageTest {
     }
 
     @Test
+    fun `an issue titled only by its Series and number is not named twice`() {
+        Storage(root).layoutPath(
+            Storage.Layout(Kind.COMIC, 8, "Saga #12", Format.CBZ, series = "Saga (2012)", position = "12", untitledIssue = true),
+        ) shouldBe "comics/Saga (2012)/Saga (2012) #12 (8)/Saga (2012) #12.cbz"
+    }
+
+    @Test
     fun `sanitizes path segments`() {
         Storage.segment("""AC/DC: "Live" <1979>?""") shouldBe "AC_DC_ _Live_ _1979__"
         Storage.segment("  ...hidden. ") shouldBe "hidden"
