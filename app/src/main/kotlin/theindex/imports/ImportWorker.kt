@@ -8,7 +8,10 @@ import theindex.files.FormatDetector
 import theindex.files.Hasher
 import theindex.files.Hashes
 import theindex.files.Storage
+import theindex.metadata.CbzRepack
+import theindex.metadata.ComicArchive
 import theindex.metadata.Extractors
+import theindex.metadata.RarComicArchive
 import theindex.metadata.UnreadableFileException
 import theindex.publications.Kind
 import theindex.publications.Library
@@ -17,19 +20,25 @@ import theindex.publications.NewOriginal
 import theindex.publications.PublicationDraft
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.deleteIfExists
 import kotlin.io.path.deleteRecursively
 import kotlin.io.path.exists
 import kotlin.io.path.ExperimentalPathApi
 
+/** Writes a comic archive's entries into a new cbz at the given path. */
+typealias Converter = (ComicArchive, Path) -> Unit
+
 /**
  * Runs Import jobs through the pipeline one at a time (spec §5). Implemented stages:
- * detect Format, hash (exact duplicates skipped), extract metadata, decide Kind, store the Original.
+ * detect Format, hash (exact duplicates skipped), extract metadata, decide Kind, store the Original,
+ * convert cbr to cbz.
  */
 class ImportWorker(
     private val db: Database,
     private val jobs: ImportJobs,
     private val library: Library,
     private val storage: Storage,
+    private val convert: Converter = CbzRepack::repack,
 ) {
     private val log = LoggerFactory.getLogger(ImportWorker::class.java)
 
@@ -38,6 +47,7 @@ class ImportWorker(
     /**
      * Startup recovery: throw away copies a crash interrupted before their rows committed,
      * and put jobs that were mid-flight back in the queue. The staged file is still there.
+     * Then make any missing cbz Conversion, so stage 7 is idempotent.
      */
     fun recover() {
         for (job in jobs.unfinished()) {
@@ -47,6 +57,9 @@ class ImportWorker(
                 jobs.recordStoreTarget(job.id, null)
             }
             if (job.state == ImportState.PROCESSING) jobs.resetToPending(job.id)
+        }
+        for (fileId in library.cbrOriginalsWithoutConversion()) {
+            convertOriginal(fileId)?.let { log.warn("File $fileId: $it") }
         }
     }
 
@@ -94,12 +107,16 @@ class ImportWorker(
         val (draft, warnings) = Drafts.from(extraction.metadata, kind, job.originalName)
 
         // Stage 6: store the Original.
-        store(job, staged, draft, NewFile(format, hashes, extraction.pageCount), warnings)
+        val fileId = store(job, staged, draft, NewFile(format, hashes, extraction.pageCount), warnings)
+
+        // Stage 7: every cbr Original gets a cbz Conversion; failing that is only a warning.
+        if (format == Format.CBR) convertOriginal(fileId)?.let { jobs.addWarning(job.id, it) }
     }
 
     private data class NewFile(val format: Format, val hashes: Hashes, val pageCount: Int?)
 
-    private fun store(job: ImportJob, staged: Path, draft: PublicationDraft, file: NewFile, warnings: List<String>) {
+    /** Returns the stored Original's File id. */
+    private fun store(job: ImportJob, staged: Path, draft: PublicationDraft, file: NewFile, warnings: List<String>): Long {
         val publicationId = library.reservePublicationId()
         val names = library.layoutNames(draft)
         val storedPath = storage.layoutPath(
@@ -118,7 +135,7 @@ class ImportWorker(
         jobs.recordStoreTarget(job.id, storedPath)
         storage.copyAtomically(staged, storedPath)
 
-        transaction(db) {
+        val fileId = transaction(db) {
             val fileId = with(library) { insertPublication(publicationId, draft, NewOriginal(file.format, file.hashes, storedPath, file.pageCount)) }
             jobs.finishInTransaction(
                 job.id,
@@ -127,8 +144,34 @@ class ImportWorker(
                 publicationId = publicationId,
                 fileId = fileId,
             )
+            fileId
         }
         clearStaging(job)
+        return fileId
+    }
+
+    /**
+     * Repacks a cbr Original into a cbz Conversion next to it (spec §5 stage 7), built in
+     * staging and then moved in like any stored File. Returns a warning when it can't.
+     */
+    private fun convertOriginal(originalId: Long): String? {
+        val original = library.storedFile(originalId)
+        val target = original.storedPath.substringBeforeLast('.') + "." + Format.CBZ.extension
+        val built = storage.staging.resolve("conversion-$originalId.${Format.CBZ.extension}")
+        return try {
+            Files.createDirectories(built.parent)
+            RarComicArchive.open(storage.resolve(original.storedPath)).use { convert(it, built) }
+            val hashes = Hasher.hash(built)
+            library.fileIdWithSha256(hashes.sha256)?.let { return "cbz Conversion is already in the library as File $it" }
+            storage.copyAtomically(built, target)
+            library.insertConversion(original, hashes, target)
+            null
+        } catch (e: Exception) {
+            log.warn("Conversion of File $originalId failed", e)
+            "cbz Conversion failed: ${e.message ?: e::class.simpleName}"
+        } finally {
+            built.deleteIfExists()
+        }
     }
 
     /** A failed job keeps its file in `failed/<jobId>/` so it can be fixed and dropped in again. */

@@ -13,6 +13,7 @@ dependencies {
     implementation(libs.bundles.ktorServer)
     implementation(libs.bundles.persistence)
     implementation(libs.jsoup)
+    implementation(libs.junrar)
     implementation(libs.koinKtor)
     implementation(libs.koinLoggerSlf4j)
     runtimeOnly(libs.logback)

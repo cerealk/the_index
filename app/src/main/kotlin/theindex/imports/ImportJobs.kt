@@ -148,6 +148,15 @@ class ImportJobs(private val db: Database, private val clock: Clock) {
         }
     }
 
+    /** A warning from a stage that runs after the job's outcome is committed (spec §5 stage 7). */
+    fun addWarning(id: Long, warning: String) = transaction(db) {
+        val warnings = ImportJobTable.selectAll().where { ImportJobTable.id eq id }.single()[ImportJobTable.warnings]
+        ImportJobTable.update({ ImportJobTable.id eq id }) {
+            it[ImportJobTable.warnings] = warnings + warning
+            it[updatedAt] = clock.instant()
+        }
+    }
+
     /** Jobs a crash may have left half-way: still unfinished, or with a copy in flight. */
     fun unfinished(): List<ImportJob> = transaction(db) {
         ImportJobTable.selectAll()
