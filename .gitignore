@@ -46,3 +46,6 @@ bin/
 ### Local Docker Compose data ###
 /data/
 /.nwave/
+
+### Git worktrees ###
+/.worktrees/
